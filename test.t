@@ -1,7 +1,7 @@
 #!perl -w
 use strict;
 
-# $Id: test.t,v 1.3 2000-09-23 22:28:23-04 roderick Exp $
+# $Id: test.t,v 1.3 2000/09/24 02:28:23 roderick Exp $
 #
 # Copyright (c) 2000 Roderick Schertler.  All rights reserved.  This
 # program is free software; you can redistribute it and/or modify it

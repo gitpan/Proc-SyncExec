@@ -1,4 +1,4 @@
-# $Id: SyncExec.pm,v 1.4 2000-09-23 22:28:47-04 roderick Exp $
+# $Id: SyncExec.pm,v 1.5 2005/02/04 12:15:57 roderick Exp $
 #
 # Copyright (c) 1997 Roderick Schertler.  All rights reserved.  This
 # program is free software; you can redistribute it and/or modify it
@@ -16,7 +16,7 @@ Proc::SyncExec - Spawn processes but report exec() errors
 
     # Synchronized fork/exec which reports exec errors in $!:
     $pid = sync_exec $command, @arg;
-    $pid = sync_exec $code_ref, @command;	# run code after fork in kid
+    $pid = sync_exec $code_ref, $cmd, @arg;	# run code after fork in kid
 
     # fork() which retries if it fails, then croaks() if it still fails.
     $pid = fork_retry;
@@ -30,7 +30,7 @@ Proc::SyncExec - Spawn processes but report exec() errors
     $fh = sync_popen_noshell 'r', @command_which_outputs;
     $fh = sync_popen_noshell 'w', @command_which_inputs;
     ($fh, $pid) = sync_popen_noshell 'r', @command_which_outputs;
-    ($fh , $pid)= sync_popen_noshell 'w', @command_which_inputs;
+    ($fh, $pid)= sync_popen_noshell 'w', @command_which_inputs;
 
 =head1 DESCRIPTION
 
@@ -60,7 +60,7 @@ use Fcntl	qw(F_SETFD);
 use POSIX	qw(EINTR);
 use Symbol	qw(gensym qualify_to_ref);
 
-$VERSION	= '1.00';
+$VERSION	= '1.01';
 @ISA		= qw(Exporter);
 @EXPORT_OK	= qw(fork_retry sync_exec sync_fhpopen_noshell
 			sync_popen_noshell sync_open);
@@ -202,8 +202,10 @@ sub sync_fhpopen_noshell {
 			and open $fh_dup_to, $fh_dup_type . fileno $fh_child
 			and close $fh_child
 		}, @cmd;
+    my $errno = $!;
     close $fh_child
 	or croak "Error closing parent pipe: $!";
+    $! = $errno;
     return $result;
 }
 
@@ -224,7 +226,8 @@ sub sync_popen_noshell {
     @_ >= 2 or croak 'Usage: sync_popen_noshell type cmd...';
     my ($type, @cmd) = @_;
     my $fh = gensym;
-    my $pid = sync_fhpopen_noshell $fh, $type, @cmd;
+    my $pid = sync_fhpopen_noshell $fh, $type, @cmd
+    	or return;
     wantarray ? ($fh, $pid) : $fh;
 }
 
