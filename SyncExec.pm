@@ -1,4 +1,4 @@
-# $Id: SyncExec.pm,v 1.1 1997-08-13 12:41:31-04 roderick Exp $
+# $Id: SyncExec.pm,v 1.4 2000-09-23 22:28:47-04 roderick Exp $
 #
 # Copyright (c) 1997 Roderick Schertler.  All rights reserved.  This
 # program is free software; you can redistribute it and/or modify it
@@ -10,7 +10,27 @@ Proc::SyncExec - Spawn processes but report exec() errors
 
 =head1 SYNOPSIS
 
-    XXX
+    # Normal-looking piped opens which properly report exec() errors in $!:
+    sync_open WRITER_FH, "|command -with args" or die $!;
+    sync_open READER_FH, "command -with args|" or die $!;
+
+    # Synchronized fork/exec which reports exec errors in $!:
+    $pid = sync_exec $command, @arg;
+    $pid = sync_exec $code_ref, @command;	# run code after fork in kid
+
+    # fork() which retries if it fails, then croaks() if it still fails.
+    $pid = fork_retry;
+    $pid = fork_retry 100;		# retry 100 times rather than 5
+    $pid = fork_retry 100, 2;		# sleep 2 rather than 5 seconds between
+
+    # A couple of interfaces similar to sync_open() but which let you
+    # avoid the shell:
+    $pid = sync_fhpopen_noshell READERFH, 'r', @command;
+    $pid = sync_fhpopen_noshell WRITERFH, 'w', @command;
+    $fh = sync_popen_noshell 'r', @command_which_outputs;
+    $fh = sync_popen_noshell 'w', @command_which_inputs;
+    ($fh, $pid) = sync_popen_noshell 'r', @command_which_outputs;
+    ($fh , $pid)= sync_popen_noshell 'w', @command_which_inputs;
 
 =head1 DESCRIPTION
 
@@ -36,11 +56,11 @@ use vars	qw($VERSION @ISA @EXPORT_OK);
 
 use Carp	qw(croak);
 use Exporter	  ();
-use Fcntl	  ();
-use POSIX	  ();
+use Fcntl	qw(F_SETFD);
+use POSIX	qw(EINTR);
 use Symbol	qw(gensym qualify_to_ref);
 
-$VERSION	= 0.01;
+$VERSION	= '1.00';
 @ISA		= qw(Exporter);
 @EXPORT_OK	= qw(fork_retry sync_exec sync_fhpopen_noshell
 			sync_popen_noshell sync_open);
@@ -112,33 +132,33 @@ sub sync_exec {
     if (!$pid) {
 	my $ok = 1;
 	$ok = close $reader				if $ok;
-	$ok = fcntl $writer, Fcntl::F_SETFD(), 1	if $ok;
+	$ok = fcntl $writer, F_SETFD, 1			if $ok;
 	$ok = &$code()					if $ok && $code;
 	$^W = 0; # turn off "Can't exec" message
 	if (!$ok or !exec @cmd) {
 	    select $writer;
 	    $| = 1;
 	    print $!+0;
-	    POSIX::_exit(1);
+	    POSIX::_exit 1;
 	}
     }
-    close $writer or croak "Error closing parent's write pipe:";
+    close $writer or croak "Error closing parent's write pipe: $!";
 
     my ($nread, $buf);
     while (1) {
 	$nread = sysread $reader, $buf, 16;
 	last if defined $nread;
-	next if $! == POSIX::EINTR();
-	croak 'Error reading from pipe:';
+	next if $! == EINTR;
+	croak "Error reading from pipe: $!";
     }
-    close $reader or croak "Error closing parent's read pipe:";
+    close $reader or croak "Error closing parent's read pipe: $!";
     if ($nread) {
     	while (waitpid($pid, 0) == -1) {
-	    next if $! == POSIX::EINTR();
+	    next if $! == EINTR;
 	    croak "Error waiting for child: $!";
 	}
 	$pid = undef;
-	$! = $buf+0 || POSIX::EINTR();
+	$! = $buf+0 || EINTR;
     }
     return $pid;
 }
@@ -176,14 +196,14 @@ sub sync_fhpopen_noshell {
 	croak "Invalid popen type `$type'";
     }
 
-    $result or croak "Can't pipe():";
+    $result or croak "Can't pipe(): $!";
     $result = sync_exec sub {
 		    close $fh_parent
 			and open $fh_dup_to, $fh_dup_type . fileno $fh_child
 			and close $fh_child
 		}, @cmd;
     close $fh_child
-	or croak 'Error closing parent pipe:';
+	or croak "Error closing parent pipe: $!";
     return $result;
 }
 
@@ -254,10 +274,6 @@ sub sync_open {
 __END__
 
 =back
-
-=head1 EXAMPLES
-
-    XXX
 
 =head1 AUTHOR
 

@@ -1,7 +1,11 @@
 Revision history for Perl extension Proc::SyncExec.
 
+1.00  Sat Sep 23 22:26:04 EDT 2000
+
+    - Add a synopsis and tests.
+
 0.01  Wed Aug 13 12:41:00 EDT 1997
 
     - Initial version.
 
-$Id: Changes,v 1.1 1997-08-13 12:41:31-04 roderick Exp $
+$Id: Changes,v 1.2 2000-09-23 22:26:14-04 roderick Exp $
